@@ -5,11 +5,11 @@ pub type JobStage = Vec<JobStageElement>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JobStageElement {
-    id: i64,
-    name: String,
+    pub id: i64,
+    pub name: String,
     created_at: String,
     updated_at: String,
-    job_id: i64,
+    pub job_id: i64,
     // priority: i64,
     // interviews: Vec<Interview>,
 }
