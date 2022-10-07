@@ -1,213 +1,105 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables, deprecated, unused_imports)] //TODO: cleanup
 use config::Config;
+use reqwest::blocking::Client;
+use reqwest::Error;
 use serde_json;
 use std::collections::HashMap;
+use std::io;
+use std::io::Read;
+use std::vec;
 
 mod candidates;
+mod job_stages;
 mod jobs;
 
-fn main() {
-
-    let json = r#"[
-        {
-          "id": 6404,
-          "name": "Archaeologist",
-          "requisition_id": "abc123",
-          "notes": "<p>Resistance to electro-magnetic radiation a plus!</p>",
-          "confidential": false,
-          "status": "closed",
-          "created_at": "2013-12-10T14:42:58Z",
-          "opened_at": "2013-12-11T14:42:58Z",
-          "closed_at": "2013-12-12T14:42:58Z",
-          "updated_at": "2013-12-12T14:42:58Z",
-          "is_template": false,
-          "copied_from_id": 2345,
-          "departments": [
-            {
-              "id": 25907,
-              "name": "Second-Level department",
-              "parent_id": 25908,
-              "child_ids": [14510],
-              "external_id": "12345"
-            }
-          ],
-          "offices": [
-            {
-              "id": 47012,
-              "name": "New York",
-              "location": {
-                "name": "New York, United States"
-              },
-              "primary_contact_user_id": 150893,
-              "parent_id": 50849,
-              "child_ids": [50852, 50891],
-              "external_id": "15679"
-            }
-          ],
-          "custom_fields": {
-            "employment_type": "Full-Time",
-            "maximum_budget": "$81.5k",
-            "salary_range": {
-              "min_value": 70000,
-              "max_value": 90000,
-              "unit": "USD"
-            }
-          },
-          "keyed_custom_fields": {
-            "employment_type": {
-              "name": "Time type",
-              "type": "single_select",
-              "value": "Full-Time"
-            },
-            "budget": {
-              "name": "Maximum Budget",
-              "type": "short_text",
-              "value": "Full-Time"
-            },
-            "salary_range": {
-              "name": "Salary Range",
-              "type": "currency_range",
-              "value": {
-                "min_value": 70000,
-                "max_value": 90000,
-                "unit": "USD"
-              }
-            }
-          },
-          "hiring_team": {
-            "hiring_managers": [
-              {
-                "id": 84275,
-                "first_name": "Kaylee",
-                "last_name": "Prime",
-                "name": "Kaylee Prime",
-                "employee_id": "13636"
-              },
-              {
-                "id": 169779,
-                "first_name": "Hank",
-                "last_name": "Hollandaise",
-                "name": "Hank Hollandaise",
-                "employee_id": "34537"
-              }
-            ],
-            "recruiters": [
-              {
-                "id": 81111,
-                "first_name": "Samuel",
-                "last_name": "Skateboard",
-                "name": "Samuel Skateboard",
-                "employee_id": "34531",
-                "responsible": false
-              },
-              {
-                "id": 153448,
-                "first_name": "Stegosaurus",
-                "last_name": "Heels",
-                "name": "Stegosaurus Heels",
-                "employee_id": "45748",
-                "responsible": true
-              }
-            ],
-            "coordinators": [
-              {
-                "id": 122635,
-                "first_name": "Teddy",
-                "last_name": "Pizzazz",
-                "name": "Teddy Pizzazz",
-                "employee_id": "47327",
-                "responsible": true
-              },
-              {
-                "id": 177046,
-                "first_name": "Mirandella",
-                "last_name": "Lager",
-                "name": "Mirandella Lager",
-                "employee_id": "43626",
-                "responsible": false
-              }
-            ],
-            "sourcers": [
-              {
-                "id": 122635,
-                "first_name": "Teddy",
-                "last_name": "Pizzazz",
-                "name": "Teddy Pizzazz",
-                "employee_id": "47327"
-              }
-            ]
-          },
-          "openings": [
-            {
-              "id": 123,
-              "opening_id": "3-1",
-              "status": "open",
-              "opened_at": "2015-11-20T23:14:14.736Z",
-              "closed_at": "2017-11-20T23:14:14.736Z",
-              "application_id": 45678,
-              "close_reason": {
-                "id": 678,
-                "name": "Hired - Backfill"
-              }
-            },
-            {
-              "id": 124,
-              "opening_id": "3-2",
-              "status": "open",
-              "opened_at": "2015-11-20T23:14:14.739Z",
-              "closed_at": null,
-              "application_id": null,
-              "close_reason": null
-            },
-            {
-              "id": 125,
-              "opening_id": null,
-              "status": "open",
-              "opened_at": "2016-02-03T20:00:00.000Z",
-              "closed_at": null,
-              "application_id": null
-            },
-            {
-              "id": 126,
-              "opening_id": "2-4",
-              "status": "closed",
-              "opened_at": "2016-02-03T16:38:46.985Z",
-              "closed_at": "2016-02-03T16:39:09.811Z",
-              "application_id": 1232,
-              "close_reason": {
-                "id": 689,
-                "name": "Hired"
-              }
-            }
-          ]
-        }
-      ]"#;
-
-    let model: jobs::Jobs = serde_json::from_str(&json).unwrap();
-
-    let model = &model[0];
-
-    println!("{}", &model.name);
-    println!("{}", &model.id);
-    println!("{}", &model.requisition_id);
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
         .add_source(config::File::with_name("settings/Settings"))
         .build();
 
     match &settings {
-            Ok(cfg) => println!("A config was found: {:#?}", cfg),
-            Err(e) => println!("Settings.toml could not be found. Error - {}", e),
+        Ok(cfg) => println!("A config was found"),
+        Err(e) => println!("Settings.toml could not be found. Error - {}", e),
+    }
+
+    let setting = match settings.unwrap().deserialize::<HashMap<String, String>>() {
+        Ok(json) => json,
+        Err(e) => {
+            println!(
+                "Settings.toml file not did not contain a valid API key. Error - {}",
+                e
+            );
+            HashMap::new()
         }
+    };
 
-    let setting = match settings.unwrap().deserialize::<HashMap<String, String>>()
-        {
-            Ok(json) => {json},
-            Err(e) =>{ 
-                println!("Settings.toml file not did not contain a valid API key. Error - {}", e);
-                HashMap::new()
-            },
-        };
+    let api_key = match setting.get("api-key") {
+        Some(key) => key,
+        None => {
+            println!("API could not be found in settings file");
+            ""
+        }
+    };
 
-    println!("{:?}", setting);
+    println!("Press any key to load jobs from Greenhouse.io");
+
+    let mut x = String::with_capacity(5);
+    io::stdin().read_line(&mut x).expect("Error reading input");
+    //   let x = x.trim().parse().expect("Error parsing number");
+
+    clearscreen::clear().expect("failed to clear screen");
+
+    let client = Client::new();
+
+    let user_name = api_key.to_string();
+    let password: Option<String> = None;
+
+    let response = client
+        .get("https://harvest.greenhouse.io/v1/jobs?status=open")
+        .basic_auth(user_name, password)
+        .send()?;
+
+    status_ok(&response);
+
+    //  let json = response.json::<HashMap<String, String>>()?;
+    //  eprintln!("{:?}", json);
+
+    // &response.unwrap().copy_to(&mut std::io::stdout())?;
+
+    //  let json: jobs::Jobs = response.json()?;
+    //  let text = response.text();
+    //  eprintln!("{:?}", text);
+
+    let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
+    let job_iter = jobs.iter();
+
+    let mut job_map = HashMap::new();
+    let mut i: i32 = 1;
+    for val in job_iter {
+        job_map.insert(i, &val.name);
+        i = i + 1;
+    }
+
+    println!("{} Jobs Found from API", job_map.keys().len());
+    println!("Select a job by number to load job stages");
+
+    for (key, value) in &job_map {
+        println!("{}: {}", key, value);
+    }
+
+    let mut x = String::with_capacity(5);
+    io::stdin().read_line(&mut x).expect("Error reading input");
+    let x: i32 = x.trim().parse().expect("Error parsing number");
+
+    println!("You entered: {}", x);
+
+    Ok(())
+}
+
+fn status_ok(res: &reqwest::blocking::Response) {
+    if res.status().is_success() {
+        println!("Successfully called API with status - {}", res.status());
+    } else {
+        println!("Bad status - {}", res.status());
+    }
 }
