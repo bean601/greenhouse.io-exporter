@@ -18,12 +18,23 @@ mod job_stages;
 mod jobs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    clear_screen();
+
+    println!("==============================================================================================");
+    println!("==============================================================================================");
+    println!("================== GREENHOUSE.IO RESUME AND COVER LETTER EXPORT TOOL =========================");
+    println!("==============================================================================================");
+    println!("==============================================================================================");
+    println!();
+    println!();
+    println!();
+
     let settings = Config::builder()
         .add_source(config::File::with_name("settings/Settings"))
         .build();
 
     match &settings {
-        Ok(cfg) => println!("A config was found"),
+        Ok(cfg) => println!("A valid Settings.toml config was found, loading settings..."),
         Err(e) => println!("Settings.toml could not be found. Error - {}", e),
     }
 
@@ -41,26 +52,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key = match setting.get("api-key") {
         Some(key) => key,
         None => {
-            println!("API could not be found in settings file");
+            println!("api-key could not be found in settings file");
             ""
         }
     };
 
-    println!("Press any key to load jobs from Greenhouse.io");
+    let api_root = match setting.get("api-root") {
+        Some(key) => key,
+        None => {
+            println!("api-root could not be found in settings file");
+            ""
+        }
+    };
+    
+    println!();
+    println!();
+    println!();
+    println!();
+    println!();
+    println!("Press [ENTER] key to load jobs from Greenhouse.io API ({})", api_root);
+    println!("Press [Ctrl+C] key to exit application at any time");
 
     let mut x = String::with_capacity(5);
     io::stdin().read_line(&mut x).expect("Error reading input");
 
-    clear_screen();
+    loop{
+        clear_screen();
 
-    let job_number = select_job(api_key);
-    //println!("You entered: {}", job_number);
-    clear_screen();
+        let job_number = select_job(api_root, api_key);
+        //println!("You entered: {}", job_number);
+        clear_screen();
 
-    let job_stage_number = select_job_stage(api_key, job_number);
-    clear_screen();
+        let job_stage_number = select_job_stage(api_root, api_key, job_number);
+        clear_screen();
 
-    get_applications(api_key, job_number, job_stage_number);
+        let applications_found = get_applications(api_root, api_key, job_number, job_stage_number);
+
+        if applications_found > 0 {
+            let input = get_input().to_uppercase();
+            let continue_to_download = input.trim();
+
+            if continue_to_download == "Y"{
+                
+            }
+
+            clear_screen();
+        }
+        else
+        {
+            println!("No applications found in this stage.");
+        }
+
+        println!("Enter [Y] to continuing searching jobs, [N] to exit.");
+
+        let input = get_input().to_uppercase();
+        let run_again = input.trim();
+
+        if run_again == "Y"{
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
 
     Ok(())
 }
@@ -79,12 +134,19 @@ fn get_number_input() -> Result<i32, ParseIntError> {
     x.trim().parse()
 }
 
-fn call_api(api_key: &str, url: &str) -> reqwest::blocking::Response {
+fn get_input<'a>() -> String {
+    let mut x = String::with_capacity(5);
+    io::stdin().read_line(&mut x).expect("Error reading input");
+    x
+}
+
+fn call_api(api_root: &str, api_key: &str, url: &str) -> reqwest::blocking::Response {
     let client = Client::new();
     let user_name = api_key.to_string();
     let password: Option<String> = None;
+    let combined_url = &format!("{}{}", api_root, url);
     let response = client
-        .get(url)
+        .get(combined_url)
         .basic_auth(user_name, password)
         .send()
         .unwrap(); //TODO: handle error case
@@ -94,8 +156,8 @@ fn call_api(api_key: &str, url: &str) -> reqwest::blocking::Response {
     response
 }
 
-fn select_job(api_key: &str) -> i64 {
-    let response = call_api(api_key, "https://harvest.greenhouse.io/v1/jobs?status=open");
+fn select_job(api_root: &str, api_key: &str) -> i64 {
+    let response = call_api(api_root, api_key, "/jobs?status=open");
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
@@ -106,21 +168,22 @@ fn select_job(api_key: &str) -> i64 {
         i = i + 1;
     }
 
-    println!("{} Jobs Found", job_map.keys().len());
+    println!("{} Jobs Found With Open Status", job_map.keys().len());
     println!();
 
     loop {
         println!("Select a job by number to load job stages:");
+        println!();
 
         for (key, value) in &job_map {
-            println!("{}: {} {}", key, value.name, value.id);
+            println!("{}: {}", key, value.name);
         }
 
         let entered_number = match get_number_input() {
             Ok(num) => num,
             Err(_) => {
-                println!("That's not a valid job number");
                 clear_screen();
+                println!("That's not a valid job number");
                 continue;
             }
         };
@@ -128,18 +191,19 @@ fn select_job(api_key: &str) -> i64 {
         match job_map.get(&entered_number) {
             Some(job) => return job.id,
             None => {
-                println!("That's not a valid job number");
                 clear_screen();
+                println!("That's not a valid job number");
                 continue;
             }
         }
     }
 }
 
-fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
+fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> i64 {
     let response = call_api(
+        api_root,
         api_key,
-        &format!("https://harvest.greenhouse.io/v1/jobs/{}/stages", job_id),
+        &format!("/jobs/{}/stages", job_id),
     );
 
     let job_stages: job_stages::JobStage =
@@ -156,6 +220,7 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
     println!();
     loop {
         println!("Select a job stage by number to download resumes and cover letters:");
+        println!();
 
         for (key, value) in &job_stages_map {
             println!("{}: {}", key, value.name);
@@ -164,8 +229,8 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
         let entered_number = match get_number_input() {
             Ok(num) => num,
             Err(_) => {
-                println!("That's not a valid job stage number");
                 clear_screen();
+                println!("That's not a valid job stage number");
                 continue;
             }
         };
@@ -173,19 +238,20 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
         match job_stages_map.get(&entered_number) {
             Some(job_stage) => return job_stage.id,
             None => {
-                println!("That's not a valid job stage number");
                 clear_screen();
+                println!("That's not a valid job stage number");
                 continue;
             }
         }
     }
 }
 
-fn get_applications(api_key: &str, job_id: i64, job_stage_id: i64) {
+fn get_applications(api_root: &str, api_key: &str, job_id: i64, job_stage_id: i64) -> i32 {
     let response = call_api(
+        api_root,
         api_key,
         &format!(
-            "https://harvest.greenhouse.io/v1/applications?job_id={}",
+            "/applications?job_id={}",
             job_id
         ),
     );
@@ -194,12 +260,15 @@ fn get_applications(api_key: &str, job_id: i64, job_stage_id: i64) {
 
     //todo figure out how to use a filter for this
     let mut applications_map = HashMap::new();
-    let mut i: i32 = 1;
+    let mut i: i32 = 0;
     for val in &applications {
         let stage_id = val.current_stage.as_ref().unwrap().id;
-        if stage_id == job_stage_id {
+        if stage_id == job_stage_id {    
+            if i == 0 {
+                i = 1; //TODO: shameful, fix this
+            }
             
-            let candidate = get_candidate(api_key, val.candidate_id);
+            let candidate = get_candidate(api_root, api_key, val.candidate_id);
 
             //todo: handle current_stage missing better than unwrap
             applications_map.insert(i, ApplicationData::new(val.id, &val.attachments, stage_id, val.candidate_id, candidate));
@@ -207,53 +276,55 @@ fn get_applications(api_key: &str, job_id: i64, job_stage_id: i64) {
         }
     }
 
+    clear_screen();
+
     //pull the attachments of type=resume/cover_letter
-    //let attachments_to_download = HashMap::new();
 
     for (key, value) in &applications_map {
        // println!("{} / {:?}", key, value.attachments);
-        
-        let app_attachment_iter = value.attachments.iter();
-        for a in app_attachment_iter {
-            if a.attachment_type == "cover_letter" || a.attachment_type == "resume" {
-                println!("{}", a.url);
+                
+        let mut cover_letter_found : bool = false;
+        let mut resume_found : bool = false;
+        let mut attachment_download_message : &str = "";
+        let attachment_iter = value.attachments.iter();
+
+        for a in attachment_iter {
+            if a.attachment_type == "cover_letter" {
+                cover_letter_found = true;
+            }
+            if a.attachment_type == "resume" {
+                resume_found = true;
             }
         }
+
+        if cover_letter_found && resume_found 
+            {
+                attachment_download_message = "Cover letter and resume found for";
+            }
+            else if cover_letter_found {
+                attachment_download_message = "Cover letter only found for";
+            }
+            else if resume_found {
+                attachment_download_message = "Resume only found for";
+            }
+
+            println!("{} - {}, {}", attachment_download_message, value.candidate.last_name, value.candidate.first_name);
     }
 
-    // let app_map_iter = applications_map.iter();
-    // for val in app_map_iter {
-    //     println!("{:?}",val);
-    //     println!();
+    if i > 0 {
+        println!();
+        println!("Do you want to download cover letter/resume data for all users above? [Y]/[N]");
+    }
 
-
-    //     // let app_attachment_iter = val.attachments.iter();
-    //     // for attachment in app_attachment_iter {
-    //     //     if attachment.attachment_type == "cover_letter" || attachment.attachment_type == "resume" {
-    //     //         attachments_to_download.insert(val.candidate.last_name, attachment.url);
-    //     //     }
-    //     // }
-    // }
-
-
-   //println!("{:?}", attachments_to_download);
-
-
-
-    println!(
-        "{} Applications Found For Stage {}",
-        applications_map.keys().len(),
-        job_stage_id
-    );
-    println!();
+    i
 }
 
-
-fn get_candidate(api_key: &str, candidate_id: i64) -> CandidateData {
+fn get_candidate(api_root: &str, api_key: &str, candidate_id: i64) -> CandidateData {
     let response = call_api(
+        api_root,
         api_key,
         &format!(
-            "https://harvest.greenhouse.io/v1/candidates/{}",
+            "/candidates/{}",
             candidate_id
         ),
     );
@@ -263,8 +334,8 @@ fn get_candidate(api_key: &str, candidate_id: i64) -> CandidateData {
     
     let first_name = &candidate_data.first_name;
     let last_name = &candidate_data.last_name;
-    println!("Loading candidate data for - {}, {}", first_name, last_name);
-
+    println!("Loading candidate data for - {}, {}...", last_name, first_name);
+    
     candidate_data
 }
 
