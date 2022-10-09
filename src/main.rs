@@ -98,11 +98,10 @@ fn select_job(api_key: &str) -> i64 {
     let response = call_api(api_key, "https://harvest.greenhouse.io/v1/jobs?status=open");
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
-    let job_iter = jobs.iter();
 
     let mut job_map = HashMap::new();
     let mut i: i32 = 1;
-    for val in job_iter {
+    for val in &jobs {
         job_map.insert(i, JobData::new(val.id, &val.name));
         i = i + 1;
     }
@@ -145,11 +144,10 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
 
     let job_stages: job_stages::JobStage =
         serde_json::from_str(response.text().unwrap().as_str()).unwrap();
-    let job_stages_iter = job_stages.iter();
 
     let mut job_stages_map = HashMap::new();
     let mut i: i32 = 1;
-    for val in job_stages_iter {
+    for val in &job_stages {
         job_stages_map.insert(i, JobStageData::new(val.id, &val.name));
         i = i + 1;
     }
@@ -193,12 +191,11 @@ fn get_applications(api_key: &str, job_id: i64, job_stage_id: i64) {
     );
 
     let applications: Applications = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
-    let applications_iter = applications.iter();
 
     //todo figure out how to use a filter for this
     let mut applications_map = HashMap::new();
     let mut i: i32 = 1;
-    for val in applications_iter {
+    for val in &applications {
         let stage_id = val.current_stage.as_ref().unwrap().id;
         if stage_id == job_stage_id {
             
