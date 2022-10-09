@@ -3,20 +3,41 @@ use serde::Serialize;
 
 pub type Candidates = Vec<Candidate>;
 
+#[derive(Hash, Debug)]
+pub struct CandidateData {
+    pub id: i64,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+impl CandidateData {
+    pub fn new<'a>(
+        id: i64,
+        first_name: String,
+        last_name: String,
+    ) -> CandidateData {
+        CandidateData {
+            id: id,
+            first_name: first_name,
+            last_name: last_name,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Candidate {
-    id: i64,
-    first_name: String,
-    last_name: String,
+    pub id: i64,
+    pub first_name: String,
+    pub last_name: String,
     // company: String,
     // title: String,
-    created_at: String,
-    updated_at: String,
+    //created_at: String,
+    //updated_at: String,
     // last_activity: String,
     // is_private: bool,
     // photo_url: Option<serde_json::Value>,
-    attachments: Vec<Attachment>,
-    application_ids: Vec<i64>,
+    //attachments: Vec<Attachment>,
+    //application_ids: Vec<i64>,
     // phone_numbers: Vec<Address>,
     // addresses: Vec<Address>,
     // email_addresses: Vec<Address>,
@@ -26,7 +47,7 @@ pub struct Candidate {
     // coordinator: Option<serde_json::Value>,
     // can_email: bool,
     // tags: Vec<String>,
-    applications: Vec<Application>,
+    //applications: Vec<Application>,
     // educations: Vec<Education>,
     // employments: Vec<Employment>,
     // linked_user_ids: Vec<i64>,

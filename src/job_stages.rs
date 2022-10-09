@@ -3,6 +3,18 @@ use serde::Serialize;
 
 pub type JobStage = Vec<JobStageElement>;
 
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub struct JobStageData<'a> {
+    pub id: i64,
+    pub name: &'a str,
+}
+
+impl JobStageData<'_> {
+    pub fn new(id: i64, name: &str) -> JobStageData {
+        JobStageData { id: id, name: name }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JobStageElement {
     pub id: i64,

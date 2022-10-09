@@ -7,7 +7,12 @@ use std::io;
 use std::io::Read;
 use std::num::ParseIntError;
 use std::vec;
+use crate::candidates::{CandidateData, Candidate};
+use crate::applications::{ApplicationData, AttachmentDownload, Applications};
+use crate::jobs::JobData;
+use crate::job_stages::JobStageData;
 
+mod applications;
 mod candidates;
 mod job_stages;
 mod jobs;
@@ -52,8 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //println!("You entered: {}", job_number);
     clear_screen();
 
-    let job_status_number = select_job_stage(api_key, job_number);
+    let job_stage_number = select_job_stage(api_key, job_number);
     clear_screen();
+
+    get_applications(api_key, job_number, job_stage_number);
 
     Ok(())
 }
@@ -82,21 +89,9 @@ fn call_api(api_key: &str, url: &str) -> reqwest::blocking::Response {
         .send()
         .unwrap(); //TODO: handle error case
 
-    status_ok(&response);
+    //status_ok(&response);
 
     response
-}
-
-#[derive(Hash, Eq, PartialEq, Debug)]
-struct JobData<'a> {
-    pub id: i64,
-    pub name: &'a str,
-}
-
-impl JobData<'_> {
-    fn new(id: i64, name: &str) -> JobData {
-        JobData { id: id, name: name }
-    }
 }
 
 fn select_job(api_key: &str) -> i64 {
@@ -112,14 +107,14 @@ fn select_job(api_key: &str) -> i64 {
         i = i + 1;
     }
 
-    println!("{} Jobs Found from API", job_map.keys().len());
+    println!("{} Jobs Found", job_map.keys().len());
     println!();
 
     loop {
         println!("Select a job by number to load job stages:");
 
         for (key, value) in &job_map {
-            println!("{}: {}", key, value.name);
+            println!("{}: {} {}", key, value.name, value.id);
         }
 
         let entered_number = match get_number_input() {
@@ -142,20 +137,7 @@ fn select_job(api_key: &str) -> i64 {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Debug)]
-struct JobStageData<'a> {
-    pub id: i64,
-    pub name: &'a str,
-}
-
-impl JobStageData<'_> {
-    fn new(id: i64, name: &str) -> JobStageData {
-        JobStageData { id: id, name: name }
-    }
-}
-
 fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
-    println!("{}", job_id);
     let response = call_api(
         api_key,
         &format!("https://harvest.greenhouse.io/v1/jobs/{}/stages", job_id),
@@ -172,7 +154,7 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
         i = i + 1;
     }
 
-    println!("{} Job Stages Found from API", job_stages_map.keys().len());
+    println!("{} Job Stages Found", job_stages_map.keys().len());
     println!();
     loop {
         println!("Select a job stage by number to download resumes and cover letters:");
@@ -201,6 +183,94 @@ fn select_job_stage(api_key: &str, job_id: i64) -> i64 {
     }
 }
 
-fn clear_screen(){
+fn get_applications(api_key: &str, job_id: i64, job_stage_id: i64) {
+    let response = call_api(
+        api_key,
+        &format!(
+            "https://harvest.greenhouse.io/v1/applications?job_id={}",
+            job_id
+        ),
+    );
+
+    let applications: Applications = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
+    let applications_iter = applications.iter();
+
+    //todo figure out how to use a filter for this
+    let mut applications_map = HashMap::new();
+    let mut i: i32 = 1;
+    for val in applications_iter {
+        let stage_id = val.current_stage.as_ref().unwrap().id;
+        if stage_id == job_stage_id {
+            
+            let candidate = get_candidate(api_key, val.candidate_id);
+
+            //todo: handle current_stage missing better than unwrap
+            applications_map.insert(i, ApplicationData::new(val.id, &val.attachments, stage_id, val.candidate_id, candidate));
+            i = i + 1;
+        }
+    }
+
+    //pull the attachments of type=resume/cover_letter
+    //let attachments_to_download = HashMap::new();
+
+    for (key, value) in &applications_map {
+       // println!("{} / {:?}", key, value.attachments);
+        
+        let app_attachment_iter = value.attachments.iter();
+        for a in app_attachment_iter {
+            if a.attachment_type == "cover_letter" || a.attachment_type == "resume" {
+                println!("{}", a.url);
+            }
+        }
+    }
+
+    // let app_map_iter = applications_map.iter();
+    // for val in app_map_iter {
+    //     println!("{:?}",val);
+    //     println!();
+
+
+    //     // let app_attachment_iter = val.attachments.iter();
+    //     // for attachment in app_attachment_iter {
+    //     //     if attachment.attachment_type == "cover_letter" || attachment.attachment_type == "resume" {
+    //     //         attachments_to_download.insert(val.candidate.last_name, attachment.url);
+    //     //     }
+    //     // }
+    // }
+
+
+   //println!("{:?}", attachments_to_download);
+
+
+
+    println!(
+        "{} Applications Found For Stage {}",
+        applications_map.keys().len(),
+        job_stage_id
+    );
+    println!();
+}
+
+
+fn get_candidate(api_key: &str, candidate_id: i64) -> CandidateData {
+    let response = call_api(
+        api_key,
+        &format!(
+            "https://harvest.greenhouse.io/v1/candidates/{}",
+            candidate_id
+        ),
+    );
+
+    let candidate: Candidate = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
+    let candidate_data = CandidateData::new(candidate.id, candidate.first_name, candidate.last_name);
+    
+    let first_name = &candidate_data.first_name;
+    let last_name = &candidate_data.last_name;
+    println!("Loading candidate data for - {}, {}", first_name, last_name);
+
+    candidate_data
+}
+
+fn clear_screen() {
     clearscreen::clear().expect("Failed to clear screen");
 }
