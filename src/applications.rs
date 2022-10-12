@@ -11,23 +11,23 @@ pub struct AttachmentDownload {
 }
 
 #[derive(Hash, Debug)]
-pub struct ApplicationData<'a> {
+pub struct ApplicationData {
     pub id: i64,
-    pub attachments: &'a Vec<Attachment>,
+    pub attachments: Vec<Attachment>,
     // pub current_stage: &'a applications::CurrentStage,
     pub current_stage_id: i64,
     pub candidate_id: i64,
     pub candidate: CandidateData,
 }
 
-impl ApplicationData<'_> {
-    pub fn new<'a>(
+impl ApplicationData {
+    pub fn new(
         id: i64,
-        attachments: &'a Vec<Attachment>,
+        attachments: Vec<Attachment>,
         current_stage_id: i64,
         candidate_id: i64,
         candidate: CandidateData,
-    ) -> ApplicationData<'a> {
+    ) -> ApplicationData {
         ApplicationData {
             id,
             attachments,
@@ -70,7 +70,7 @@ pub struct Answer {
     answer: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Hash, Clone)]
 pub struct Attachment {
     pub filename: String,
     pub url: String,

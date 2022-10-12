@@ -27,6 +27,12 @@ mod jobs;
 // file strucute - Job Name - Job Stage / all files under that
 //
 
+struct SettingsData {
+    api_key : String,
+    api_root : String,
+    output_folder : String,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
         .add_source(config::File::with_name("settings/Settings"))
@@ -71,6 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    let settings_data = SettingsData{ api_key : api_key.to_string(), api_root : api_root.to_string(), output_folder : output_folder.to_string() };
+
     clear_screen();
 
     println!("==============================================================================================");
@@ -98,21 +106,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         clear_screen();
 
-        let job_data = select_job(api_root, api_key);
+        let job_data = select_job(&settings_data);
         clear_screen();
 
-        let job_stage_data = select_job_stage(api_root, api_key, job_data.id);
+        let job_stage_data = select_job_stage(&settings_data, job_data.id);
         clear_screen();
 
-        create_download_folder(output_folder, job_data.name, job_stage_data.name);
 
-        get_applications(
-            api_root,
-            api_key,
+        let applications = get_applications(
+            &settings_data,
             job_data.id,
             job_stage_data.id,
-            output_folder,
+            output_folder.to_string(),
         );
+
+        create_folder_and_download_attachments(applications, output_folder.to_string(), job_data.name.to_string(), job_stage_data.name.to_string());
 
         println!("Enter [Y] to continuing searching jobs, [N] to exit.");
 
@@ -141,11 +149,11 @@ fn get_input() -> String {
     x
 }
 
-fn call_api(api_root: &str, api_key: &str, url: &str) -> reqwest::blocking::Response {
+fn call_api(settings: &SettingsData, url: &str) -> reqwest::blocking::Response {
     let client = Client::new();
-    let user_name = api_key.to_string();
+    let user_name = settings.api_key.to_string();
     let password: Option<String> = None;
-    let combined_url = &format!("{}{}", api_root, url);
+    let combined_url = &format!("{}{}", settings.api_root, url);
 
     let response = client
         .get(combined_url)
@@ -171,8 +179,8 @@ fn status_ok(res: &reqwest::blocking::Response, url: &str) {
     }
 }
 
-fn select_job(api_root: &str, api_key: &str) -> JobData {
-    let response = call_api(api_root, api_key, "/jobs?status=open");
+fn select_job(settings: &SettingsData,) -> JobData {
+    let response = call_api(settings, "/jobs?status=open");
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
@@ -220,8 +228,8 @@ fn select_job(api_root: &str, api_key: &str) -> JobData {
 }
 
 
-fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> JobStageData {
-    let response = call_api(api_root, api_key, &format!("/jobs/{}/stages", job_id));
+fn select_job_stage(settings: &SettingsData, job_id: i64) -> JobStageData {
+    let response = call_api(settings, &format!("/jobs/{}/stages", job_id));
 
     let job_stages: job_stages::JobStage =
         serde_json::from_str(response.text().unwrap().as_str()).unwrap();
@@ -270,16 +278,13 @@ fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> JobStageData 
 }
 
 fn get_applications(
-    api_root: &str,
-    api_key: &str,
+    settings: &SettingsData,
     job_id: i64,
     job_stage_id: i64,
-    output_folder: &str,
-) {
-    let response = call_api(
-        api_root,
-        api_key,
-        &format!("/applications?job_id={}", job_id),
+    output_folder: String,
+) -> HashMap<i32, ApplicationData> {
+
+    let response = call_api(settings, &format!("/applications?job_id={}", job_id),
     );
 
     let applications: Applications =
@@ -294,14 +299,14 @@ fn get_applications(
         let stage_id = val.current_stage.as_ref().unwrap().id;
         if stage_id == job_stage_id {
             any_applications_found = true;
-            let candidate = get_candidate(api_root, api_key, val.candidate_id);
+            let candidate = get_candidate(settings, val.candidate_id);
 
             //todo: handle current_stage missing better than unwrap
             applications_map.insert(
                 i,
                 ApplicationData::new(
                     val.id,
-                    &val.attachments,
+                    val.attachments.clone(),
                     stage_id,
                     val.candidate_id,
                     candidate,
@@ -343,7 +348,11 @@ fn get_applications(
         );
     }
 
-    if any_applications_found {
+    applications_map
+}
+
+fn create_folder_and_download_attachments(applications : HashMap<i32, ApplicationData>, output_folder : String, job_name : String, job_stage_name : String) {
+    if applications.keys().any(|&x| x > 0) {
         println!();
         println!("Do you want to download cover letter/resume data for all users above? [Y]/[N]");
 
@@ -351,19 +360,10 @@ fn get_applications(
         let continue_to_download = input.trim();
 
         if continue_to_download == "Y" {
+            let output_folder = create_download_folder(&output_folder, job_name, job_stage_name);
+            
             println!("Downloading...");
-
-            for value in applications_map.values() {
-
-                for attachment in value.attachments {
-                    download_attachments(
-                        &attachment.url,
-                        &value.candidate.last_name,
-                        &attachment.attachment_type,
-                        &output_folder
-                    );
-                }
-            }
+            download_attachments(applications, output_folder);
         }
     } else {
         println!("No applications found in this stage.");
@@ -371,8 +371,25 @@ fn get_applications(
     }
 }
 
-fn get_candidate(api_root: &str, api_key: &str, candidate_id: i64) -> CandidateData {
-    let response = call_api(api_root, api_key, &format!("/candidates/{}", candidate_id));
+fn download_attachments(applications : HashMap<i32, ApplicationData>, output_folder : String) {
+  
+
+            for value in applications.values() {
+
+                for attachment in &value.attachments {
+                    download_attachment_file(
+                        &attachment.url,
+                        &value.candidate.last_name,
+                        &attachment.attachment_type,
+                        &output_folder
+                    );
+                }
+            }
+  
+}
+
+fn get_candidate(settings: &SettingsData, candidate_id: i64) -> CandidateData {
+    let response = call_api(settings, &format!("/candidates/{}", candidate_id));
 
     let candidate: Candidate = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
     let candidate_data =
@@ -392,12 +409,14 @@ fn clear_screen() {
     clearscreen::clear().expect("Failed to clear screen");
 }
 
-fn create_download_folder(output_folder : &str, job_name : String, job_stage_name : String) {
+fn create_download_folder(output_folder : &str, job_name : String, job_stage_name : String) -> String {
     let dir = format!("{}{}-{}", output_folder, job_name, job_stage_name);
     fs::create_dir_all(&dir).expect("Could not create directory");
+
+    dir
 }
 
-fn download_attachments(url: &str, candidate_last_name: &str, attachment_type: &str, dir: &str) {
+fn download_attachment_file(url: &str, candidate_last_name: &str, attachment_type: &str, dir: &str) {
     if attachment_type == "resume" || attachment_type == "cover_letter" {
         let response = call_api_external(url);
 
