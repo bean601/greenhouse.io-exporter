@@ -20,6 +20,13 @@ mod candidates;
 mod job_stages;
 mod jobs;
 
+//
+// TODO
+// ordering list
+// duplicates
+// file strucute - Job Name - Job Stage / all files under that
+//
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Config::builder()
         .add_source(config::File::with_name("settings/Settings"))
@@ -91,17 +98,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         clear_screen();
 
-        let job_number = select_job(api_root, api_key);
+        let job_data = select_job(api_root, api_key);
         clear_screen();
 
-        let job_stage_number = select_job_stage(api_root, api_key, job_number);
+        let job_stage_data = select_job_stage(api_root, api_key, job_data.id);
         clear_screen();
+
+        create_download_folder(output_folder, job_data.name, job_stage_data.name);
 
         get_applications(
             api_root,
             api_key,
-            job_number,
-            job_stage_number,
+            job_data.id,
+            job_stage_data.id,
             output_folder,
         );
 
@@ -162,7 +171,7 @@ fn status_ok(res: &reqwest::blocking::Response, url: &str) {
     }
 }
 
-fn select_job(api_root: &str, api_key: &str) -> i64 {
+fn select_job(api_root: &str, api_key: &str) -> JobData {
     let response = call_api(api_root, api_key, "/jobs?status=open");
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
@@ -170,12 +179,15 @@ fn select_job(api_root: &str, api_key: &str) -> i64 {
     let mut job_map = HashMap::new();
     let mut i: i32 = 1;
     for val in &jobs {
-        job_map.insert(i, JobData::new(val.id, &val.name));
+        job_map.insert(i, JobData::new(val.id, val.name.to_string()));
         i += 1;
     }
 
     println!("{} Jobs Found With Open Status", job_map.keys().len());
     println!();
+
+    let job_id : i64;
+    let job_name : String;
 
     loop {
         println!("Select a job by number to load job stages:");
@@ -195,17 +207,20 @@ fn select_job(api_root: &str, api_key: &str) -> i64 {
         };
 
         match job_map.get(&entered_number) {
-            Some(job) => return job.id,
+            Some(job) => {
+                return JobData::new(job.id, job.name.to_string())
+            }
             None => {
                 clear_screen();
                 println!("That's not a valid job number");
                 continue;
             }
-        }
+        };
     }
 }
 
-fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> i64 {
+
+fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> JobStageData {
     let response = call_api(api_root, api_key, &format!("/jobs/{}/stages", job_id));
 
     let job_stages: job_stages::JobStage =
@@ -214,12 +229,15 @@ fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> i64 {
     let mut job_stages_map = HashMap::new();
     let mut i: i32 = 1;
     for val in &job_stages {
-        job_stages_map.insert(i, JobStageData::new(val.id, &val.name));
+        job_stages_map.insert(i, JobStageData::new(val.id, val.name.to_string()));
         i += 1;
     }
 
     println!("{} Job Stages Found", job_stages_map.keys().len());
     println!();
+
+    let job_stage_data : JobStageData;
+
     loop {
         println!("Select a job stage by number to download resumes and cover letters:");
         println!();
@@ -238,7 +256,9 @@ fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> i64 {
         };
 
         match job_stages_map.get(&entered_number) {
-            Some(job_stage) => return job_stage.id,
+            Some(job_stage) => {
+                return JobStageData::new(job_stage.id, job_stage.name.to_string())
+            },
             None => {
                 clear_screen();
                 println!("That's not a valid job stage number");
@@ -246,6 +266,7 @@ fn select_job_stage(api_root: &str, api_key: &str, job_id: i64) -> i64 {
             }
         }
     }
+   
 }
 
 fn get_applications(
@@ -333,16 +354,13 @@ fn get_applications(
             println!("Downloading...");
 
             for value in applications_map.values() {
-                let folder_name = &value.candidate.last_name;
-                let dir = format!("{}{}", output_folder, folder_name);
-                fs::create_dir_all(&dir).expect("Could not create directory");
 
                 for attachment in value.attachments {
                     download_attachments(
                         &attachment.url,
                         &value.candidate.last_name,
                         &attachment.attachment_type,
-                        &dir,
+                        &output_folder
                     );
                 }
             }
@@ -372,6 +390,11 @@ fn get_candidate(api_root: &str, api_key: &str, candidate_id: i64) -> CandidateD
 
 fn clear_screen() {
     clearscreen::clear().expect("Failed to clear screen");
+}
+
+fn create_download_folder(output_folder : &str, job_name : String, job_stage_name : String) {
+    let dir = format!("{}{}-{}", output_folder, job_name, job_stage_name);
+    fs::create_dir_all(&dir).expect("Could not create directory");
 }
 
 fn download_attachments(url: &str, candidate_last_name: &str, attachment_type: &str, dir: &str) {

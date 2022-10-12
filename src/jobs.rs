@@ -4,13 +4,13 @@ use serde::Serialize;
 pub type Jobs = Vec<Job>;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
-pub struct JobData<'a> {
+pub struct JobData {
     pub id: i64,
-    pub name: &'a str,
+    pub name: String,
 }
 
-impl JobData<'_> {
-    pub fn new(id: i64, name: &str) -> JobData {
+impl JobData {
+    pub fn new(id: i64, name: String) -> JobData {
         JobData { id, name }
     }
 }
