@@ -1,6 +1,6 @@
+use crate::candidates::CandidateData;
 use serde::Deserialize;
 use serde::Serialize;
-use crate::candidates::CandidateData;
 
 pub type Applications = Vec<Application>;
 
@@ -8,19 +8,6 @@ pub type Applications = Vec<Application>;
 pub struct AttachmentDownload {
     pub url: String,
     pub candidate: CandidateData,
-}
-
-impl AttachmentDownload {
-    pub fn new(
-        url: String,
-        candidate: CandidateData,
-    ) -> 
-    AttachmentDownload {
-        AttachmentDownload {
-            url: url,
-            candidate: candidate,
-        }
-    }
 }
 
 #[derive(Hash, Debug)]
@@ -42,11 +29,11 @@ impl ApplicationData<'_> {
         candidate: CandidateData,
     ) -> ApplicationData<'a> {
         ApplicationData {
-            id: id,
-            attachments: &attachments,
-            current_stage_id: current_stage_id,
-            candidate_id: candidate_id,
-            candidate: candidate
+            id,
+            attachments,
+            current_stage_id,
+            candidate_id,
+            candidate,
         }
     }
 }
@@ -66,7 +53,7 @@ pub struct Application {
     // rejection_details: Option<serde_json::Value>,
     pub jobs: Vec<CurrentStage>,
     job_post_id: Option<i64>,
-    status: String,
+    pub status: String,
     pub current_stage: Option<CurrentStage>,
     // answers: Vec<Answer>,
     // prospective_office: Option<ProspectiveOffice>,

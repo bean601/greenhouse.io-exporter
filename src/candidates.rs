@@ -1,8 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-pub type Candidates = Vec<Candidate>;
-
 #[derive(Hash, Debug)]
 pub struct CandidateData {
     pub id: i64,
@@ -11,15 +9,11 @@ pub struct CandidateData {
 }
 
 impl CandidateData {
-    pub fn new<'a>(
-        id: i64,
-        first_name: String,
-        last_name: String,
-    ) -> CandidateData {
+    pub fn new(id: i64, first_name: String, last_name: String) -> CandidateData {
         CandidateData {
-            id: id,
-            first_name: first_name,
-            last_name: last_name,
+            id,
+            first_name,
+            last_name,
         }
     }
 }

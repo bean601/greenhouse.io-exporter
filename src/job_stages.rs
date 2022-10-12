@@ -11,7 +11,7 @@ pub struct JobStageData<'a> {
 
 impl JobStageData<'_> {
     pub fn new(id: i64, name: &str) -> JobStageData {
-        JobStageData { id: id, name: name }
+        JobStageData { id, name }
     }
 }
 
