@@ -9,6 +9,7 @@ use std::io::copy;
 use std::io::Cursor;
 use std::num::ParseIntError;
 use std::path::Path;
+use linked_hash_map::LinkedHashMap;
 
 use crate::applications::{ApplicationData, Applications};
 use crate::candidates::{Candidate, CandidateData};
@@ -19,12 +20,6 @@ mod applications;
 mod candidates;
 mod job_stages;
 mod jobs;
-
-//
-// TODO
-// ordering list
-// duplicates
-//
 
 struct SettingsData {
     api_key: String,
@@ -195,7 +190,7 @@ fn select_job(settings: &SettingsData) -> JobData {
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
-    let mut job_map = HashMap::new();
+    let mut job_map = LinkedHashMap::new();
     let mut i: i32 = 1;
     for val in &jobs {
         job_map.insert(i, JobData::new(val.id, val.name.to_string()));
@@ -239,7 +234,7 @@ fn select_job_stage(settings: &SettingsData, job_id: i64) -> JobStageData {
     let job_stages: job_stages::JobStage =
         serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
-    let mut job_stages_map = HashMap::new();
+    let mut job_stages_map = LinkedHashMap::new();
     let mut i: i32 = 1;
     for val in &job_stages {
         job_stages_map.insert(i, JobStageData::new(val.id, val.name.to_string()));
@@ -277,14 +272,14 @@ fn select_job_stage(settings: &SettingsData, job_id: i64) -> JobStageData {
     }
 }
 
-fn get_applications(settings: &SettingsData, job_id: i64, job_stage_id: i64) -> HashMap<i32, ApplicationData> {
+fn get_applications(settings: &SettingsData, job_id: i64, job_stage_id: i64) -> LinkedHashMap<i32, ApplicationData> {
     let response = call_api(settings, &format!("/applications?job_id={}", job_id));
 
     let applications: Applications =
         serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
     //todo figure out how to use a filter for this
-    let mut applications_map = HashMap::new();
+    let mut applications_map = LinkedHashMap::new();
     let mut i: i32 = 1;
     for val in &applications {
         if val.status == "active" {
@@ -342,7 +337,7 @@ fn get_applications(settings: &SettingsData, job_id: i64, job_stage_id: i64) -> 
     applications_map
 }
 
-fn create_folder_and_download_attachments(applications: HashMap<i32, ApplicationData>, output_folder: String, job_name: String, job_stage_name: String) {
+fn create_folder_and_download_attachments(applications: LinkedHashMap<i32, ApplicationData>, output_folder: String, job_name: String, job_stage_name: String) {
     if applications.keys().any(|&x| x > 0) {
         println!();
         println!("Do you want to download cover letter/resume data for all users above? [Y]/[N]");
@@ -362,7 +357,7 @@ fn create_folder_and_download_attachments(applications: HashMap<i32, Application
     }
 }
 
-fn download_attachments(applications: HashMap<i32, ApplicationData>, output_folder: String) {
+fn download_attachments(applications: LinkedHashMap<i32, ApplicationData>, output_folder: String) {
     for value in applications.values() {
         for attachment in &value.attachments {
             download_attachment_file(

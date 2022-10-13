@@ -325,6 +325,7 @@ version = "0.1.0"
 dependencies = [
  "clearscreen",
  "config",
+ "linked-hash-map",
  "reqwest",
  "serde",
  "serde_json",
