@@ -72,19 +72,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn show_splash_screen(settings: &SettingsData) {
     clear_screen();
 
-    println!("==============================================================================================");
-    println!("==============================================================================================");
-    println!("================== GREENHOUSE.IO RESUME AND COVER LETTER EXPORT TOOL =========================");
-    println!("==============================================================================================");
-    println!("==============================================================================================");
-    println!();
-    println!();
-    println!();
-    println!();
-    println!();
-    println!();
-    println!();
-    println!();
+    let banner = format!(
+        "{}\n{}\n{} {} {}\n{}\n{}\n\n\n\n\n\n\n\n",
+        "=".repeat(95),
+        "=".repeat(95),
+        "=".repeat(18),
+        "GREENHOUSE.IO RESUME AND COVER LETTER EXPORT TOOL",
+        "=".repeat(25),
+        "=".repeat(95),
+        "=".repeat(95)
+    );
+
+    println!("{}", banner);
     println!(
         "Press [ENTER] key to load jobs from Greenhouse.io API ({})",
         settings.api_root
@@ -189,12 +188,11 @@ fn select_job(settings: &SettingsData) -> JobData {
     let response = call_api(settings, "/jobs?status=open");
 
     let jobs: jobs::Jobs = serde_json::from_str(response.text().unwrap().as_str()).unwrap();
-
     let mut job_map = LinkedHashMap::new();
-    let mut i: i32 = 1;
-    for val in &jobs {
-        job_map.insert(i, JobData::new(val.id, val.name.to_string()));
+
+    for (mut i, item) in jobs.iter().enumerate() {
         i += 1;
+        job_map.insert(i.to_string().parse::<i32>().unwrap(), JobData::new(item.id, item.name.to_string()));
     }
 
     println!("{} Jobs Found With Open Status", job_map.keys().len());
@@ -235,10 +233,9 @@ fn select_job_stage(settings: &SettingsData, job_id: i64) -> JobStageData {
         serde_json::from_str(response.text().unwrap().as_str()).unwrap();
 
     let mut job_stages_map = LinkedHashMap::new();
-    let mut i: i32 = 1;
-    for val in &job_stages {
-        job_stages_map.insert(i, JobStageData::new(val.id, val.name.to_string()));
+    for (mut i, item) in job_stages.iter().enumerate() {
         i += 1;
+        job_stages_map.insert(i.to_string().parse::<i32>().unwrap(), JobStageData::new(item.id, item.name.to_string()));
     }
 
     println!("{} Job Stages Found", job_stages_map.keys().len());
@@ -280,6 +277,12 @@ fn get_applications(settings: &SettingsData, job_id: i64, job_stage_id: i64) -> 
 
     //todo figure out how to use a filter for this
     let mut applications_map = LinkedHashMap::new();
+
+    // let applications = applications
+    //     .iter()
+    //     .filter(|app| app.status == "active" && app.current_stage.as_ref().unwrap().id == job_stage_id)
+    //     .collect();
+
     let mut i: i32 = 1;
     for val in &applications {
         if val.status == "active" {
@@ -357,7 +360,7 @@ fn create_folder_and_download_attachments(applications: LinkedHashMap<i32, Appli
     }
 }
 
-fn download_attachments(applications: LinkedHashMap<i32, ApplicationData>, output_folder: String) {
+fn download_attachments(applications: LinkedHashMap<i32, ApplicationData>, output_folder: String) {    
     for value in applications.values() {
         for attachment in &value.attachments {
             download_attachment_file(
